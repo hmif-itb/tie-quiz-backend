@@ -1,5 +1,5 @@
 import { Request, Response, Router } from "express";
-import * as jwt from 'jsonwebtoken';
+import * as jwt from "jsonwebtoken";
 import * as dotenv from "dotenv";
 import dayjs from "dayjs";
 import { OAuth2Client, LoginTicket } from "google-auth-library";
@@ -28,6 +28,8 @@ authRouter.post("/verifytoken", async (req: Request, res: Response): Promise<voi
             id: ticket.getPayload()?.email?.split("@")[0],
             token: token
         };
+
+        //console.log(payload);
 
         jwt.sign(payload, JWT_SECRET, {
             expiresIn: "1h"
@@ -64,13 +66,44 @@ authRouter.get("/verifysession", (req: Request, res: Response): void => {
             if(error) {
                 throw error;
             }
-            const { token } = payload as JWTPayload;
+            const { token, id, name } = payload as JWTPayload;
 
             const ticket: LoginTicket = await client.verifyIdToken({
                 idToken: token,
                 audience: GOOGLE_CLIENT_ID
             });
+
+            res.status(200).json({
+                status: "success"
+            });
+        } catch (e) {
+            const message: string = (e as Error).message;
+            //console.log(message);
     
+            res.status(401).json({
+                status: "error"
+            });
+        }
+    }); 
+});
+
+authRouter.post("/logout", (req: Request, res: Response): void => {
+    const accessToken: string = req.cookies.accessToken;
+
+    jwt.verify(accessToken, JWT_SECRET, async (error: any, payload: any): Promise<void> => {
+        try {
+            if(error) {
+                throw error;
+            }
+            const { token, id, name } = payload as JWTPayload;
+
+            const ticket: LoginTicket = await client.verifyIdToken({
+                idToken: token,
+                audience: GOOGLE_CLIENT_ID
+            });
+
+            res.clearCookie("accessToken");
+
             res.status(200).json({
                 status: "success"
             });

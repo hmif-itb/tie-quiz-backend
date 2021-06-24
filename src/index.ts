@@ -1,11 +1,20 @@
+import "reflect-metadata";
 import * as http from "http";
 import * as dotenv from "dotenv";
+import * as jwt from "jsonwebtoken";
 import express, { Express } from "express";
+import { createConnection, getRepository } from "typeorm";
 import { Server, Socket } from "socket.io";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import * as cookie from "cookie";
+import { OAuth2Client, LoginTicket } from "google-auth-library";
+
 import { authRouter } from "./routes/auth.router";
+import { User } from "./entity/user.model";
+import { Question } from "./entity/question.model";
+import { JWTPayload } from "./types/jwt";
 
 dotenv.config();
 
@@ -20,36 +29,87 @@ const CLIENT_URL: string = process.env.CLIENT_URL;
 const GOOGLE_CLIENT_ID: string = process.env.GOOGLE_CLIENT_ID;
 const JWT_SECRET: string = process.env.JWT_SECRET;
 
+createConnection({
+    type: "mysql",
+    host: process.env.MYSQL_HOST as string,
+    port: 3306,
+    username: process.env.MYSQL_USER as string,
+    password: process.env.MYSQL_PASS as string,
+    database: process.env.MYSQL_DBNAME as string,
+    entities: [
+        User, Question
+    ],
+    synchronize: true,
+    logging: false
+}).then(() => {
+    const app: Express = express();
+    const httpServer: http.Server = http.createServer(app);
 
-const app: Express = express();
-const httpServer: http.Server = http.createServer(app);
+    const client: OAuth2Client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-const io: Server = new Server(httpServer, {
-    cors: {
-        origin: CLIENT_URL,
-        methods: ["GET", "POST"],
-    }
-});
+    const io: Server = new Server(httpServer, {
+        cors: {
+            origin: CLIENT_URL,
+            methods: ["GET", "POST"],
+            credentials: true
+        }
+    });
 
-const corsOptions: cors.CorsOptions = {
-    origin: [CLIENT_URL],
-    credentials: true
-};
-
-app.use(helmet());
-app.use(cors(corsOptions));
-app.use(cookieParser());
-app.use(express.json());
-
-app.use("/", authRouter);
+    const corsOptions: cors.CorsOptions = {
+        origin: [CLIENT_URL],
+        credentials: true
+    };
 
 
 
-io.on("connection", (socket: Socket) => {
-    console.log(socket.id);
-});
+    app.use(helmet());
+    app.use(cors(corsOptions));
+    app.use(cookieParser());
+    app.use(express.json());
+
+    app.use("/", authRouter);
 
 
-httpServer.listen(PORT, () => {
-    console.log(`Server is up and running at PORT: ${PORT}`);
-});
+    io.on("connection", (socket: Socket) => {
+        console.log("wow ada yang connect");
+        console.log(socket.id);
+        console.log(socket.request.headers.cookie);
+
+        const cookies = cookie.parse(socket.request.headers.cookie || "");
+
+        const accessToken: string = cookies.accessToken;
+
+        jwt.verify(accessToken, JWT_SECRET, async (error: any, payload: any): Promise<void> => {
+            try {
+                if(error) {
+                    throw error;
+                }
+                const { token, id, name } = payload as JWTPayload;
+
+                const ticket: LoginTicket = await client.verifyIdToken({
+                    idToken: token,
+                    audience: GOOGLE_CLIENT_ID
+                });
+
+                const userData = await getRepository(User).findOne(id);
+
+                socket.emit("init", userData);
+
+                
+            } catch (e) {
+                const message: string = (e as Error).message;
+                //console.log(message);
+        
+                
+            }
+        }); 
+        
+    });
+
+
+    httpServer.listen(PORT, () => {
+        console.log(`Server is up and running at PORT: ${PORT}`);
+    });
+}).catch((error) => console.log(error));
+
+
