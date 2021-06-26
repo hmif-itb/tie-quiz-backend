@@ -12,8 +12,8 @@ import * as cookie from "cookie";
 import { OAuth2Client, LoginTicket } from "google-auth-library";
 
 import { authRouter } from "./routes/auth.router";
-import { User } from "./entity/user.model";
-import { Question } from "./entity/question.model";
+import { User } from "./entities/user.model";
+import { Question } from "./entities/question.model";
 import { JWTPayload } from "./types/jwt";
 import { registerHandler } from "./handlers/handler";
 
