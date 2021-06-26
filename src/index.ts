@@ -15,6 +15,7 @@ import { authRouter } from "./routes/auth.router";
 import { User } from "./entity/user.model";
 import { Question } from "./entity/question.model";
 import { JWTPayload } from "./types/jwt";
+import { registerHandler } from "./handlers/handler";
 
 dotenv.config();
 
@@ -70,40 +71,14 @@ createConnection({
     app.use("/", authRouter);
 
 
+    let idToSocket = new Map<string, string>();
+    let socketToId = new Map<string, string>();
+
+
     io.on("connection", (socket: Socket) => {
-        console.log("wow ada yang connect");
-        console.log(socket.id);
-        console.log(socket.request.headers.cookie);
 
-        const cookies = cookie.parse(socket.request.headers.cookie || "");
+        registerHandler(io, socket, idToSocket, socketToId);
 
-        const accessToken: string = cookies.accessToken;
-
-        jwt.verify(accessToken, JWT_SECRET, async (error: any, payload: any): Promise<void> => {
-            try {
-                if(error) {
-                    throw error;
-                }
-                const { token, id, name } = payload as JWTPayload;
-
-                const ticket: LoginTicket = await client.verifyIdToken({
-                    idToken: token,
-                    audience: GOOGLE_CLIENT_ID
-                });
-
-                const userData = await getRepository(User).findOne(id);
-
-                socket.emit("init", userData);
-
-                
-            } catch (e) {
-                const message: string = (e as Error).message;
-                //console.log(message);
-        
-                
-            }
-        }); 
-        
     });
 
 
